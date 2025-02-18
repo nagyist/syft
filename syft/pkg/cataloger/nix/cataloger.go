@@ -1,38 +1,41 @@
+/*
+Package nix provides a concrete Cataloger implementation for packages within the Nix packaging ecosystem.
+*/
 package nix
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/bmatcuk/doublestar/v4"
 
 	"github.com/anchore/syft/internal/log"
 	"github.com/anchore/syft/syft/artifact"
+	"github.com/anchore/syft/syft/file"
 	"github.com/anchore/syft/syft/pkg"
-	"github.com/anchore/syft/syft/source"
 )
 
-const (
-	catalogerName = "nix-store-cataloger"
-	nixStoreGlob  = "**/nix/store/*"
-)
+const catalogerName = "nix-store-cataloger"
 
-// StoreCataloger finds package outputs installed in the Nix store location (/nix/store/*).
-type StoreCataloger struct{}
+// storeCataloger finds package outputs installed in the Nix store location (/nix/store/*).
+type storeCataloger struct{}
 
-func NewStoreCataloger() *StoreCataloger {
-	return &StoreCataloger{}
+func NewStoreCataloger() pkg.Cataloger {
+	return &storeCataloger{}
 }
 
-func (c *StoreCataloger) Name() string {
+func (c *storeCataloger) Name() string {
 	return catalogerName
 }
 
-func (c *StoreCataloger) Catalog(resolver source.FileResolver) ([]pkg.Package, []artifact.Relationship, error) {
+func (c *storeCataloger) Catalog(ctx context.Context, resolver file.Resolver) ([]pkg.Package, []artifact.Relationship, error) {
 	// we want to search for only directories, which isn't possible via the stereoscope API, so we need to apply the glob manually on all returned paths
 	var pkgs []pkg.Package
-	var filesByPath = make(map[string]*source.LocationSet)
-	for location := range resolver.AllLocations() {
-		matchesStorePath, err := doublestar.Match(nixStoreGlob, location.RealPath)
+	var filesByPath = make(map[string]*file.LocationSet)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	for location := range resolver.AllLocations(ctx) {
+		matchesStorePath, err := doublestar.Match("**/nix/store/*", location.RealPath)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to match nix store path: %w", err)
 		}
@@ -40,7 +43,7 @@ func (c *StoreCataloger) Catalog(resolver source.FileResolver) ([]pkg.Package, [
 		parentStorePath := findParentNixStorePath(location.RealPath)
 		if parentStorePath != "" {
 			if _, ok := filesByPath[parentStorePath]; !ok {
-				s := source.NewLocationSet()
+				s := file.NewLocationSet()
 				filesByPath[parentStorePath] = &s
 			}
 			filesByPath[parentStorePath].Add(location)
@@ -65,13 +68,13 @@ func (c *StoreCataloger) Catalog(resolver source.FileResolver) ([]pkg.Package, [
 		p := &pkgs[i]
 		locations := p.Locations.ToSlice()
 		if len(locations) == 0 {
-			log.WithFields("package", p.Name).Warn("nix package has no evidence locations associated")
+			log.WithFields("package", p.Name).Debug("nix package has no evidence locations associated")
 			continue
 		}
 		parentStorePath := locations[0].RealPath
 		files, ok := filesByPath[parentStorePath]
 		if !ok {
-			log.WithFields("path", parentStorePath, "nix-store-path", parentStorePath).Warn("found a nix store file for a non-existent package")
+			log.WithFields("path", parentStorePath, "nix-store-path", parentStorePath).Debug("found a nix store file for a non-existent package")
 			continue
 		}
 		appendFiles(p, files.ToSlice()...)
@@ -80,10 +83,10 @@ func (c *StoreCataloger) Catalog(resolver source.FileResolver) ([]pkg.Package, [
 	return pkgs, nil, nil
 }
 
-func appendFiles(p *pkg.Package, location ...source.Location) {
-	metadata, ok := p.Metadata.(pkg.NixStoreMetadata)
+func appendFiles(p *pkg.Package, location ...file.Location) {
+	metadata, ok := p.Metadata.(pkg.NixStoreEntry)
 	if !ok {
-		log.WithFields("package", p.Name).Warn("nix package metadata missing")
+		log.WithFields("package", p.Name).Debug("nix package metadata missing")
 		return
 	}
 

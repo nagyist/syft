@@ -15,9 +15,9 @@ import (
 )
 
 func TestSpdxValidationTooling(t *testing.T) {
-	img := imagetest.GetFixtureImage(t, "docker-archive", "image-java-spdx-tools")
-	require.NotEmpty(t, img.Metadata.Tags)
-	imgTag := img.Metadata.Tags[0]
+	// note: the external tooling requires that the daemon explicitly has the image loaded, not just that
+	// we can get the image from a cache tar.
+	imgTag := imagetest.LoadFixtureImageIntoDocker(t, "image-java-spdx-tools")
 
 	images := []string{
 		"alpine:3.17.3@sha256:b6ca290b6b4cdcca5b3db3ffa338ee0285c11744b4a6abaa9627746ee3291d8d",
@@ -40,13 +40,25 @@ func TestSpdxValidationTooling(t *testing.T) {
 	}{
 		{
 			name:     "spdx validation tooling tag value",
-			syftArgs: []string{"packages", "-o", "spdx"},
+			syftArgs: []string{"scan", "-o", "spdx"},
 			images:   images,
 			env:      env,
 		},
 		{
 			name:     "spdx validation tooling json",
-			syftArgs: []string{"packages", "-o", "spdx-json"},
+			syftArgs: []string{"scan", "-o", "spdx-json"},
+			images:   images,
+			env:      env,
+		},
+		{
+			name:     "spdx validation tooling tag value",
+			syftArgs: []string{"scan", "-o", "spdx@2.2"},
+			images:   images,
+			env:      env,
+		},
+		{
+			name:     "spdx validation tooling json",
+			syftArgs: []string{"scan", "-o", "spdx-json@2.2"},
 			images:   images,
 			env:      env,
 		},
@@ -85,7 +97,11 @@ func TestSpdxValidationTooling(t *testing.T) {
 
 				validateCmd := exec.Command("make", "validate", fileArg, mountArg, imageArg)
 				validateCmd.Dir = filepath.Join(cwd, "test-fixtures", "image-java-spdx-tools")
-				runAndShow(t, validateCmd)
+
+				stdout, stderr, err := runCommand(validateCmd, map[string]string{})
+				if err != nil {
+					t.Fatalf("invalid SPDX document:%v\nSTDOUT:\n%s\nSTDERR:\n%s", err, stdout, stderr)
+				}
 			})
 		}
 	}

@@ -1,7 +1,7 @@
 package linux
 
 import (
-	"io/ioutil"
+	"io"
 	"os"
 	"testing"
 
@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/anchore/syft/syft/source"
+	"github.com/anchore/syft/syft/source/directorysource"
 )
 
 func TestIdentifyRelease(t *testing.T) {
@@ -336,7 +337,9 @@ func TestIdentifyRelease(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.fixture, func(t *testing.T) {
-			s, err := source.NewFromDirectory(test.fixture)
+			s, err := directorysource.New(directorysource.Config{
+				Path: test.fixture,
+			})
 			require.NoError(t, err)
 
 			resolver, err := s.FileResolver(source.SquashedScope)
@@ -539,7 +542,7 @@ func retrieveFixtureContentsAsString(fixturePath string, t *testing.T) string {
 	}
 	defer fixture.Close()
 
-	b, err := ioutil.ReadAll(fixture)
+	b, err := io.ReadAll(fixture)
 	if err != nil {
 		t.Fatalf("unable to read fixture file: %+v", err)
 	}

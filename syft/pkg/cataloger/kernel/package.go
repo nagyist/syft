@@ -4,21 +4,35 @@ import (
 	"strings"
 
 	"github.com/anchore/packageurl-go"
+	"github.com/anchore/syft/syft/cpe"
+	"github.com/anchore/syft/syft/file"
 	"github.com/anchore/syft/syft/pkg"
-	"github.com/anchore/syft/syft/source"
 )
 
 const linuxKernelPackageName = "linux-kernel"
 
-func newLinuxKernelPackage(metadata pkg.LinuxKernelMetadata, locations ...source.Location) pkg.Package {
+func createLinuxKernelCPEs(version string) []cpe.CPE {
+	c := cpe.NewWithAny()
+	c.Part = "o"
+	c.Product = "linux_kernel"
+	c.Vendor = "linux"
+	c.Version = version
+	if cpe.ValidateString(c.String()) != nil {
+		return nil
+	}
+
+	return []cpe.CPE{{Attributes: c, Source: cpe.NVDDictionaryLookupSource}}
+}
+
+func newLinuxKernelPackage(metadata pkg.LinuxKernel, archiveLocation file.Location) pkg.Package {
 	p := pkg.Package{
-		Name:         linuxKernelPackageName,
-		Version:      metadata.Version,
-		Locations:    source.NewLocationSet(locations...),
-		PURL:         packageURL(linuxKernelPackageName, metadata.Version),
-		Type:         pkg.LinuxKernelPkg,
-		MetadataType: pkg.LinuxKernelMetadataType,
-		Metadata:     metadata,
+		Name:      linuxKernelPackageName,
+		Version:   metadata.Version,
+		Locations: file.NewLocationSet(archiveLocation.WithAnnotation(pkg.EvidenceAnnotationKey, pkg.PrimaryEvidenceAnnotation)),
+		PURL:      packageURL(linuxKernelPackageName, metadata.Version),
+		Type:      pkg.LinuxKernelPkg,
+		Metadata:  metadata,
+		CPEs:      createLinuxKernelCPEs(metadata.Version),
 	}
 
 	p.SetID()
@@ -26,23 +40,15 @@ func newLinuxKernelPackage(metadata pkg.LinuxKernelMetadata, locations ...source
 	return p
 }
 
-func newLinuxKernelModulePackage(metadata pkg.LinuxKernelModuleMetadata, locations ...source.Location) pkg.Package {
-	var licenses []string
-	if metadata.License != "" {
-		licenses = []string{metadata.License}
-	} else {
-		licenses = []string{}
-	}
-
+func newLinuxKernelModulePackage(metadata pkg.LinuxKernelModule, kmLocation file.Location) pkg.Package {
 	p := pkg.Package{
-		Name:         metadata.Name,
-		Version:      metadata.Version,
-		Locations:    source.NewLocationSet(locations...),
-		Licenses:     licenses,
-		PURL:         packageURL(metadata.Name, metadata.Version),
-		Type:         pkg.LinuxKernelModulePkg,
-		MetadataType: pkg.LinuxKernelModuleMetadataType,
-		Metadata:     metadata,
+		Name:      metadata.Name,
+		Version:   metadata.Version,
+		Locations: file.NewLocationSet(kmLocation.WithAnnotation(pkg.EvidenceAnnotationKey, pkg.PrimaryEvidenceAnnotation)),
+		Licenses:  pkg.NewLicenseSet(pkg.NewLicensesFromLocation(kmLocation, metadata.License)...),
+		PURL:      packageURL(metadata.Name, metadata.Version),
+		Type:      pkg.LinuxKernelModulePkg,
+		Metadata:  metadata,
 	}
 
 	p.SetID()

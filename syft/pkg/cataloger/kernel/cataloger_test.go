@@ -4,9 +4,10 @@ import (
 	"testing"
 
 	"github.com/anchore/syft/syft/artifact"
+	"github.com/anchore/syft/syft/cpe"
+	"github.com/anchore/syft/syft/file"
 	"github.com/anchore/syft/syft/pkg"
 	"github.com/anchore/syft/syft/pkg/cataloger/internal/pkgtest"
-	"github.com/anchore/syft/syft/source"
 )
 
 func Test_KernelCataloger(t *testing.T) {
@@ -14,16 +15,16 @@ func Test_KernelCataloger(t *testing.T) {
 		Name:    "linux-kernel",
 		Version: "6.0.7-301.fc37.x86_64",
 		FoundBy: "linux-kernel-cataloger",
-		Locations: source.NewLocationSet(
-			source.NewVirtualLocation(
+		Locations: file.NewLocationSet(
+			file.NewVirtualLocation(
 				"/lib/modules/6.0.7-301.fc37.x86_64/vmlinuz",
 				"/lib/modules/6.0.7-301.fc37.x86_64/vmlinuz",
 			),
 		),
-		Type:         pkg.LinuxKernelPkg,
-		PURL:         "pkg:generic/linux-kernel@6.0.7-301.fc37.x86_64",
-		MetadataType: pkg.LinuxKernelMetadataType,
-		Metadata: pkg.LinuxKernelMetadata{
+		Type: pkg.LinuxKernelPkg,
+		PURL: "pkg:generic/linux-kernel@6.0.7-301.fc37.x86_64",
+		CPEs: []cpe.CPE{cpe.Must("cpe:2.3:o:linux:linux_kernel:6.0.7-301.fc37.x86_64:*:*:*:*:*:*:*", cpe.NVDDictionaryLookupSource)},
+		Metadata: pkg.LinuxKernel{
 			Name:            "",
 			Architecture:    "x86",
 			Version:         "6.0.7-301.fc37.x86_64",
@@ -42,18 +43,22 @@ func Test_KernelCataloger(t *testing.T) {
 		Name:    "ttynull",
 		Version: "",
 		FoundBy: "linux-kernel-cataloger",
-		Locations: source.NewLocationSet(
-			source.NewVirtualLocation("/lib/modules/6.0.7-301.fc37.x86_64/kernel/drivers/tty/ttynull.ko",
+		Locations: file.NewLocationSet(
+			file.NewVirtualLocation("/lib/modules/6.0.7-301.fc37.x86_64/kernel/drivers/tty/ttynull.ko",
 				"/lib/modules/6.0.7-301.fc37.x86_64/kernel/drivers/tty/ttynull.ko",
 			),
 		),
-		Licenses: []string{
-			"GPL v2",
-		},
-		Type:         pkg.LinuxKernelModulePkg,
-		PURL:         "pkg:generic/ttynull",
-		MetadataType: pkg.LinuxKernelModuleMetadataType,
-		Metadata: pkg.LinuxKernelModuleMetadata{
+		Licenses: pkg.NewLicenseSet(
+			pkg.NewLicenseFromLocations("GPL v2",
+				file.NewVirtualLocation(
+					"/lib/modules/6.0.7-301.fc37.x86_64/kernel/drivers/tty/ttynull.ko",
+					"/lib/modules/6.0.7-301.fc37.x86_64/kernel/drivers/tty/ttynull.ko",
+				),
+			),
+		),
+		Type: pkg.LinuxKernelModulePkg,
+		PURL: "pkg:generic/ttynull",
+		Metadata: pkg.LinuxKernelModule{
 			Name:          "ttynull",
 			Version:       "",
 			SourceVersion: "",
@@ -84,7 +89,7 @@ func Test_KernelCataloger(t *testing.T) {
 		Expects(expectedPkgs, expectedRelationships).
 		TestCataloger(t,
 			NewLinuxKernelCataloger(
-				LinuxCatalogerConfig{
+				LinuxKernelCatalogerConfig{
 					CatalogModules: true,
 				},
 			),
